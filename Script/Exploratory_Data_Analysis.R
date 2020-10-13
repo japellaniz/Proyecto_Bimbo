@@ -225,27 +225,11 @@ df_train_7semanas <- df_train_backup %>%
   group_by(Cliente_ID,Producto_ID) %>% 
   mutate(n=n()) %>% 
   filter(n>6) 
-# Aparecen combinaciones Cliente-Producto que vienen de más de una Agencia y de más
-# de una Ruta por lo que vamos a agrupar los valores de forma que tengamos
+
 
 # Veamos la distribución de n (combinaciones Cliente-Producto) sin tener en cuenta el valor 
 # dominante "7".
 par(mfrow=c(1,1))
 df_train_7semanas %>% ungroup() %>% select(n) %>% filter(n>7) %>% 
   hist(.,breaks = 1000, xlim= range(0,3000))
-
-###############################################################################
-# Esto son pruebas de agrupamiento con dplyr
-df_train_mini_7semanas <- df_train %>%
-  select(-Venta_hoy, -Dev_proxima, -Canal_ID, -Ruta_SAK, -Agencia_ID) %>% 
-  group_by(Cliente_ID,Producto_ID) %>% 
-  mutate(n=n()) %>% 
-  filter(n>1)
-
-df_train_mini_7semanas <- df_train %>%
-  select(-Venta_hoy, -Dev_proxima, -Canal_ID, -Ruta_SAK, -Agencia_ID) %>% 
-  group_by(Cliente_ID,Producto_ID) %>% 
-  summarise(n=n()) %>% 
-  filter(n>1)
-################################################################################
 
