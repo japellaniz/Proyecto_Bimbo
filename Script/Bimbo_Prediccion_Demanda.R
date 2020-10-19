@@ -25,14 +25,14 @@
 # Demanda_uni_equil — Adjusted Demand (integer) (This is the target you will predict)
 
 
-
+{
 library(tidyverse)
 library(data.table)
 library(funModeling)
 library(caret)
 library(magrittr)
 library(xgboost)
-
+}
 rm(list = ls())
 
 # ##################################################################################

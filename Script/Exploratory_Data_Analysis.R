@@ -87,6 +87,7 @@ df_train$Producto_ID <- as.factor(df_train$Producto_ID)
 str(df_train)
 summary(df_train)
 train_status <- df_status(df_train, print_results = F)
+
 train_status
 
 str(df_test)
@@ -220,7 +221,7 @@ df_temp <- df_train %>% select(Semana,Cliente_ID,Producto_ID,Demanda_uni_equil) 
 # dependiente de las otras), agrupamos por parejas Cliente-Producto y nos quedamos
 # con los registros con más de 6 entradas para asegurarnos de que hay al menos un valor 
 # por semana.
-df_train_7semanas <- df_train_backup %>%
+df_train_7semanas <- df_train %>%
   select(-Venta_hoy, -Dev_proxima, -Venta_uni_hoy, -Dev_uni_proxima) %>% 
   group_by(Cliente_ID,Producto_ID) %>% 
   mutate(n=n()) %>% 
