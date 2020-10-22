@@ -26,8 +26,18 @@ df_sample <- df_train %>% select(Cliente_ID,Producto_ID) %>%
   sample_frac(0.01)  
 df_sample <- df_train %>% inner_join(df_sample, by = c("Cliente_ID", "Producto_ID"))
 
+tablon <- df_sample %>% spread(Semana,Demanda_agg)
+
+colnames(tablon) <- c("Cliente_ID", "Producto_ID", "S3", "S4", "S5", "S6", "S7", "S8", "S9")
+
+train <- tablon %>% select(1:8)
+test <- tablon %>% select(c(1,2,9))
 
 
-test<-train[Semana==9]
-train<-train[Semana<9]
+Bimbo_rf <- randomForest(S8 ~ ., data = train, 
+                         do.trace = TRUE, ntree = 200, mtry = 5, replace = TRUE)
+Bimbo_rf
+plot(Bimbo_rf)
+
+
 
