@@ -1,0 +1,192 @@
+---
+title: "Bimbo. Predicción de la demanda"
+subtitle: "Proyecto fin de M3.1 Business Analytics. Universidad de Deusto.                  Programa en Big Data y Business Intelligence"
+author: 
+ - "Jose Luis Apellaniz"
+ - "Estíbaliz Mtz. de Bujo"
+date: "25/10/2020"
+output: 
+  html_document:
+    code folding: show
+    highlight: haddock
+    theme: flatly
+    toc: true
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introducción.
+
+```{r libraries, collapse=TRUE, message = FALSE, warning=FALSE}
+# Carga de las librerías necesarias
+library(tidyverse)
+library(data.table)
+library(caret)
+library(magrittr)
+library(Metrics)
+library(ggpubr)
+```
+
+# Preprocesado de los datos.
+Vamos a convertir y reducir la tabla original de datos de Bimbo, donde cada fila contiene los datos de las transacciones individuales para cada producto, a una tabla más manejable con los datos agregados de demanda para cada combinación posible de Cliente (tienda) y Producto, que tengan disponibles datos para las siete semanas suministradas y los presentamos por semanas.
+
+```{r data, cache =TRUE, message = FALSE, warning=FALSE}
+# Carga del archivo de datos
+dt_train<-readRDS("../Data/dt_train")
+knitr::kable(head(dt_train,10), caption = "Tabla Original de Bimbo")
+# Nos quedamos solamente con las columnas que afectan a la predicción
+train<-dt_train[, .(Semana,Cliente_ID,Producto_ID, Demanda_uni_equil)]
+# Borramos la tabla origen
+rm(dt_train)
+# Cálculo de la demanda agregada para cada combinación Semana-Cliente_ID-Producto_ID
+train<-train[, .(Demanda_agg=sum(Demanda_uni_equil)), .(Semana, Cliente_ID,Producto_ID)]
+# Obtenemos el número de semanas con datos disponibles para cada combinación Cliente_ID-Producto_ID
+train<-train[, .(Semana,Demanda_agg,num_sem=.N),.(Cliente_ID,Producto_ID)]
+# Nos quedamos con las combinaciones que tienen las 7 semanas de datos
+train<-train[num_sem==7]
+# Eliminamos el campo indicador del número de semanas
+train<-train[,num_sem:=NULL]
+# Convertimos a data frame la tabla
+df_train<-as_tibble(train)
+# Obtenemos un data frame de muestreo con datos únicos de combinaciones Cliente-
+set.seed(43)
+df_sample <- df_train %>% select(Cliente_ID,Producto_ID) %>% 
+  distinct() %>%
+  sample_frac(0.01) 
+# Borramos el data table
+rm(train)
+# Seleccionamos las filas del data frame de datos según el muestreo realizado de forma que se 
+# mantienen combinaciones con las 7 semanas de datos completas.
+df_sample <- df_train %>% inner_join(df_sample, by = c("Cliente_ID", "Producto_ID"))
+# Borramos el data frame con todos los datos y nos quedamos con el muestreado
+rm(df_train)
+# Lo convertimos en un tablón con las semanas como columnas de datos de demanda y añadimos un id
+# a cada combinación Cliente-Producto
+tablon <- df_sample %>% 
+  spread(Semana,Demanda_agg) %>% 
+  rowid_to_column(var = "id")
+# Arreglamos los nombres de las columnas.
+colnames(tablon) <- c("id","Cliente_ID", "Producto_ID", "S3", "S4", "S5", "S6", "S7", "S8", "S9")
+knitr::kable(head(tablon,10), caption = "Tabla Cliente-Producto-Demanda")
+```
+
+# Modelos de predicción.
+Siguiendo el principio de la navaja de Occam optamos por la adopción de los modelos más sencillos posibles que den buenos resultados.
+
+## Modelo 1. Normalizando entre 0 y 1.
+Normalizamos entre 0 y 1 los valores de todas las semanas.A continuación obtenemos la media para cada Cliente-Producto y calculamos la diferencia con la semana 9.
+
+```{r model_1, message = FALSE, warning=FALSE}
+train_mean <- tablon
+maximo <- max(train_mean[,4:10])
+# Normalización
+for (i in 4:10){
+  train_mean[i]<-train_mean[i]/maximo
+}
+
+train_mean <- train_mean %>% 
+  rowwise() %>% 
+  mutate(media = mean(c_across(S3:S8))) %>% 
+  mutate(diff = S9-media)
+
+train_mean %>% ggplot(aes(fill=c(S9,media))) + 
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(0,0.02))+
+  theme_minimal()+
+  labs(x = "Demanda normalizada",
+       y = "Densidad",
+       title = "Modelo media-normalizado",
+       subtitle = "Comparativa Semana 9 vs Media")
+
+```
+
+Las dos curvas siguen el mismo patrón pero la predicción va adelantada por lo que 
+para valores bajos de demanda se predecirá de menos y para valores altos
+de más. Aplicamos una corrección equivalente a la media de la diferencia 
+entre las dos curvas.
+
+
+```{r,message = FALSE, warning=FALSE}
+train_mean <- train_mean %>% 
+  mutate(Prediccion = media + mean(train_mean$diff)) %>% 
+  mutate(diff_2 = S9 - Prediccion)
+
+train_mean %>% ggplot(aes(fill=c(S9,Prediccion))) + 
+  geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(0,0.02))+
+  theme_minimal()+
+  labs(x = "Demanda normalizada",
+       y = "Densidad",
+       title = "Modelo media-normalizado-corregido",
+       subtitle = "Comparativa Semana 9 vs Prediccion")
+
+```
+
+Vemos como queda la tabla.
+```{r}
+knitr::kable(head(train_mean,10), caption = "Tabla Cliente-Producto-Demanda")
+
+df_resumen <- tibble() 
+smr <- summary(train_mean$diff_2) 
+sd_mean <- sd(train_mean$diff_2)
+var_mean <- var(train_mean$diff_2)
+rmsle_mean <- rmsle(train_mean$S9, train_mean$Prediccion)
+
+df_resumen <- as_tibble(t(c("Media-Normalizado corregido", smr[1], smr[2], smr[3], smr[4], smr[5], smr[6], sd_mean, var_mean, rmsle_mean)))
+colnames(df_resumen) <- c("Model","Min", "1st Q", "Median", "Mean", "3rd Q", "Max", "SD", "Var", "RMSLE")
+knitr::kable(df_resumen, caption = "Tabla resumen de modelos")
+```
+
+
+
+
+```{r graph_1 ,message = FALSE, warning=FALSE}
+p1<-train_mean %>% ggplot(aes(x=id, y=diff_2*100))+
+  geom_point(alpha = 1/3) +
+  geom_line(alpha = 1/6)+
+  scale_y_continuous(limits=c(-50,50))+
+  theme_minimal()+
+  labs(x = "id Producto-Cliente",
+       y = " % Desviación de la predicción",
+       title = "Modelo media-normalizado corregido")
+
+p2<-train_mean %>% ggplot(aes(x=diff_2))+
+  geom_density(color = "gray50") +
+  scale_x_continuous(limits=c(-0.005,0.005))+
+  theme_minimal()+
+  labs(x = "Desviación de la predicción",
+       y = "Densidad",
+       title = "Modelo media-normalizado corregido")
+
+p3<-train_mean %>% ggplot(aes(fill=c(S9,Prediccion)))+
+  geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(0,0.02))+
+  theme_minimal()+
+  labs(x = "Demanda normalizada",
+       y = "Densidad",
+       title = "Modelo media-normalizado corregido",
+       subtitle = "Comparativa Semana 9 vs Predicción")
+
+p4<-train_mean %>% ggplot(aes(y=diff_2))+
+  geom_boxplot(color = "orangered") +
+  scale_y_continuous(limits=c(-0.005,0.005))+
+  theme_minimal()+
+  labs(y = "Desviación de la predicción",
+       title = "Modelo media-normalizado corregido")
+  
+ggarrange(p1, p2, p3, p4)
+```
+
+```{r}
+
+```
+
+
