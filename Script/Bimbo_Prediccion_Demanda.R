@@ -57,6 +57,11 @@ df_clientes <- fread("Data/cliente_tabla.csv", colClasses = c("factor","characte
 df_producto <- read_csv("Data/producto_tabla.csv", col_types = "fc")
 df_town_state <- read_csv("Data/town_state.csv",col_types = "fcc")
 
+df_clientes <- df_clientes %>% 
+  group_by(Cliente_ID) %>% 
+  distinct(Cliente_ID, .keep_all = TRUE)
+write.csv(df_clientes, "Data/clientes.csv")
+
 # Por si queremos cambiar los nombres de las columnas
 #names(df_train) <- c()
 ##################################################################################
