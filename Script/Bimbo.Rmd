@@ -18,7 +18,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning=FALSE)
 ```
 # Introducción.
 
@@ -75,117 +75,97 @@ colnames(tablon) <- c("id","Cliente_ID", "Producto_ID", "S3", "S4", "S5", "S6", 
 knitr::kable(head(tablon,10), caption = "Tabla Cliente-Producto-Demanda")
 ```
 
-# Modelos de predicción.
-Siguiendo el principio de la navaja de Occam optamos por la adopción de los modelos más sencillos posibles que den buenos resultados.
+# Modelo de predicción. Cálculo de la media por Cliente-Producto.
+Siguiendo el principio de la navaja de Occam optamos por la adopción del modelo más sencillo posible que de buenos resultados.
 
-## Modelo 1. Normalizando entre 0 y 1.
-Normalizamos entre 0 y 1 los valores de todas las semanas.A continuación obtenemos la media para cada Cliente-Producto y calculamos la diferencia con la semana 9.
+Tomamos como predicción para cada combinación Cliente-Producto la media de las semanas de la 3 a la 8 redondeada hacia abajo.
 
-```{r model_1, message = FALSE, warning=FALSE}
-train_mean <- tablon
-maximo <- max(train_mean[,4:10])
-# Normalización
-for (i in 4:10){
-  train_mean[i]<-train_mean[i]/maximo
-}
-
-train_mean <- train_mean %>% 
+```{r}
+train_normal <- tablon %>% 
   rowwise() %>% 
-  mutate(media = mean(c_across(S3:S8))) %>% 
+  mutate(media = floor(mean(c_across(S3:S8)))) %>% 
   mutate(diff = S9-media)
 
-train_mean %>% ggplot(aes(fill=c(S9,media))) + 
+train_normal %>% ggplot(aes(fill=c(S9,Prediccion))) + 
   geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
+  scale_x_continuous(limits=c(0,10))+
   theme_minimal()+
   labs(x = "Demanda normalizada",
        y = "Densidad",
-       title = "Modelo media-normalizado",
-       subtitle = "Comparativa Semana 9 vs Media")
+       title = "Modelo de la media",
+       subtitle = "Comparativa Semana 9 vs media") 
 
 ```
 
-Las dos curvas siguen el mismo patrón pero la predicción va adelantada por lo que 
-para valores bajos de demanda se predecirá de menos y para valores altos
-de más. Aplicamos una corrección equivalente a la media de la diferencia 
-entre las dos curvas.
 
+Veamos como queda la tabla.
 
-```{r,message = FALSE, warning=FALSE}
-train_mean <- train_mean %>% 
-  mutate(Prediccion = media + mean(train_mean$diff)) %>% 
-  mutate(diff_2 = S9 - Prediccion)
-
-train_mean %>% ggplot(aes(fill=c(S9,Prediccion))) + 
-  geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
-  theme_minimal()+
-  labs(x = "Demanda normalizada",
-       y = "Densidad",
-       title = "Modelo media-normalizado-corregido",
-       subtitle = "Comparativa Semana 9 vs Prediccion")
-
-```
-
-Vemos como queda la tabla.
 ```{r}
-knitr::kable(head(train_mean,10), caption = "Tabla Cliente-Producto-Demanda")
+knitr::kable(head(train_normal,10), caption = "Tabla Cliente-Producto-Demanda")
 
 df_resumen <- tibble() 
-smr <- summary(train_mean$diff_2) 
-sd_mean <- sd(train_mean$diff_2)
-var_mean <- var(train_mean$diff_2)
-rmsle_mean <- rmsle(train_mean$S9, train_mean$Prediccion)
+smr <- summary(train_normal$diff) 
+sd <- sd(train_normal$diff)
+var <- var(train_normal$diff)
+rmsle <- rmsle(train_normal$S9, train_normal$media)
 
-df_resumen <- as_tibble(t(c("Media-Normalizado corregido", smr[1], smr[2], smr[3], smr[4], smr[5], smr[6], sd_mean, var_mean, rmsle_mean)))
+df_resumen <- as_tibble(t(c("Media", smr[1], smr[2], smr[3], smr[4], smr[5], smr[6], sd, var, rmsle)))
 colnames(df_resumen) <- c("Model","Min", "1st Q", "Median", "Mean", "3rd Q", "Max", "SD", "Var", "RMSLE")
+df_resumen$Min <- format(round(as.numeric(df_resumen$Min),4))
+df_resumen$`1st Q` <- format(round(as.numeric(df_resumen$`1st Q`),4))
+df_resumen$Median <- format(round(as.numeric(df_resumen$Median),4))
+df_resumen$Mean <- format(round(as.numeric(df_resumen$Mean),4))
+df_resumen$`3rd Q` <- format(round(as.numeric(df_resumen$`3rd Q`),4))
+df_resumen$Max <- format(round(as.numeric(df_resumen$Max),4))
+df_resumen$SD <- format(round(as.numeric(df_resumen$SD),4))
+df_resumen$Var <- format(round(as.numeric(df_resumen$Var),4))
+df_resumen$RMSLE <- format(round(as.numeric(df_resumen$RMSLE),4))
+
 knitr::kable(df_resumen, caption = "Tabla resumen de modelos")
 ```
-
-
-
+# Resumen gráfico
 
 ```{r graph_1 ,message = FALSE, warning=FALSE}
-p1<-train_mean %>% ggplot(aes(x=id, y=diff_2*100))+
+p1<-train_normal %>% ggplot(aes(x=id, y=diff))+
   geom_point(alpha = 1/3) +
   geom_line(alpha = 1/6)+
-  scale_y_continuous(limits=c(-50,50))+
+  scale_y_continuous(limits=c(-800,800))+
   theme_minimal()+
   labs(x = "id Producto-Cliente",
        y = " % Desviación de la predicción",
-       title = "Modelo media-normalizado corregido")
+       title = "Modelo media semanas")
 
-p2<-train_mean %>% ggplot(aes(x=diff_2))+
+p2<-train_normal %>% ggplot(aes(x=diff))+
   geom_density(color = "gray50") +
-  scale_x_continuous(limits=c(-0.005,0.005))+
+  scale_x_continuous(limits=c(-20,20))+
   theme_minimal()+
   labs(x = "Desviación de la predicción",
        y = "Densidad",
-       title = "Modelo media-normalizado corregido")
+       title = "Modelo media semanas")
 
-p3<-train_mean %>% ggplot(aes(fill=c(S9,Prediccion)))+
-  geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
+p3<-train_normal %>% ggplot(aes(fill=c(S9,media)))+
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
+  scale_x_continuous(limits=c(-3,50))+
   theme_minimal()+
-  labs(x = "Demanda normalizada",
+  labs(x = "Demanda",
        y = "Densidad",
-       title = "Modelo media-normalizado corregido",
+       title = "Modelo media semanas",
        subtitle = "Comparativa Semana 9 vs Predicción")
 
-p4<-train_mean %>% ggplot(aes(y=diff_2))+
+p4<-train_normal %>% ggplot(aes(y=diff))+
   geom_boxplot(color = "orangered") +
-  scale_y_continuous(limits=c(-0.005,0.005))+
+  scale_y_continuous(limits=c(-10,10))+
   theme_minimal()+
   labs(y = "Desviación de la predicción",
-       title = "Modelo media-normalizado corregido")
+       title = "Modelo media semanas")
   
 ggarrange(p1, p2, p3, p4)
 ```
 
 ```{r}
+
 
 ```
 

@@ -51,10 +51,6 @@ write_csv(df_sample,"Data/df_sample.csv")
 load("Data/Bimbo_WS.RData")
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-# Creación de partición train-test ####
-indice <- createDataPartition(tablon$S9, p = 0.8, times = 1, list=FALSE)
-datostra = tablon[ indice,]
-datostst = tablon[-indice,]
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # MODELOS DE PREDICCIÓN ####
@@ -62,183 +58,101 @@ datostst = tablon[-indice,]
 # Siguiendo el principio de la navaja de Occam optamos por la adopción
 # de los modelos más sencillos posibles que den buenos resultados.
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Modelo 1. Normalizando entre 0 y 1 ####
-# Normalizamos entre 0 y 1 los valores de todas las semana.
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Modelo: Datos sin normalizar ####
 # Obtenemos la media para cada Cliente-Producto y calculamos la diferencia con la semana 9.
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-train_mean <- tablon
-
-maximo <- max(train_mean[,4:10])
-
-# Normalización
-for (i in 4:10){
-  train_mean[i]<-train_mean[i]/maximo
-}
-
-train_mean <- train_mean %>% 
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+train_normal <- tablon %>% 
   rowwise() %>% 
-  mutate(media = mean(c_across(S3:S8))) %>% 
+  mutate(media = floor(mean(c_across(S3:S8)))) %>% 
   mutate(diff = S9-media)
 
-train_mean %>% ggplot(aes(fill=c(S9,media))) + 
+train_normal %>% ggplot(aes(fill=c(S9,Prediccion))) + 
   geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
+  scale_x_continuous(limits=c(0,10))+
   theme_minimal()+
   labs(x = "Demanda normalizada",
        y = "Densidad",
-       title = "Modelo media-normalizado",
-       subtitle = "Comparativa Semana 9 vs Media") 
+       title = "Modelo de la media",
+       subtitle = "Comparativa Semana 9 vs media") 
 
-# Las dos curvas siguen el mismo patrón pero la predicción va adelantada por lo que 
-# para valores bajos de demanda se predecirá de menos y para valores altos
-# de más. Aplicamos una corrección equivalente a la media de la diferencia 
-# entre las dos curvas.
+df_resumen <- tibble() 
+smr <- summary(train_normal$diff) 
+sd <- sd(train_normal$diff)
+var <- var(train_normal$diff)
+rmsle <- rmsle(train_normal$S9, train_normal$media)
 
-train_mean <- train_mean %>% 
-  mutate(Prediccion = media + mean(train_mean$diff)) %>% 
+df_resumen <- as_tibble(t(c("Media", smr[1], smr[2], smr[3], smr[4], smr[5], smr[6], sd, var, rmsle)))
+colnames(df_resumen) <- c("Model","Min", "1st Q", "Median", "Mean", "3rd Q", "Max", "SD", "Var", "RMSLE")
+df_resumen$Min <- format(round(as.numeric(df_resumen$Min),4))
+df_resumen$`1st Q` <- format(round(as.numeric(df_resumen$`1st Q`),4))
+df_resumen$Median <- format(round(as.numeric(df_resumen$Median),4))
+df_resumen$Mean <- format(round(as.numeric(df_resumen$Mean),4))
+df_resumen$`3rd Q` <- format(round(as.numeric(df_resumen$`3rd Q`),4))
+df_resumen$Max <- format(round(as.numeric(df_resumen$Max),4))
+df_resumen$SD <- format(round(as.numeric(df_resumen$SD),4))
+df_resumen$Var <- format(round(as.numeric(df_resumen$Var),4))
+df_resumen$RMSLE <- format(round(as.numeric(df_resumen$RMSLE),4))
+
+
+p1<-train_normal %>% ggplot(aes(x=id, y=diff))+
+  geom_point(alpha = 1/3) +
+  geom_line(alpha = 1/6)+
+  scale_y_continuous(limits=c(-800,800))+
+  theme_minimal()+
+  labs(x = "id Producto-Cliente",
+       y = " % Desviación de la predicción",
+       title = "Modelo media semanas")
+
+p2<-train_normal %>% ggplot(aes(x=diff))+
+  geom_density(color = "gray50") +
+  scale_x_continuous(limits=c(-20,20))+
+  theme_minimal()+
+  labs(x = "Desviación de la predicción",
+       y = "Densidad",
+       title = "Modelo media semanas")
+
+p3<-train_normal %>% ggplot(aes(fill=c(S9,media)))+
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(-3,50))+
+  theme_minimal()+
+  labs(x = "Demanda",
+       y = "Densidad",
+       title = "Modelo media semanas",
+       subtitle = "Comparativa Semana 9 vs Predicción")
+
+p4<-train_normal %>% ggplot(aes(y=diff))+
+  geom_boxplot(color = "orangered") +
+  scale_y_continuous(limits=c(-10,10))+
+  theme_minimal()+
+  labs(y = "Desviación de la predicción",
+       title = "Modelo media semanas")
+
+ggarrange(p1, p2, p3, p4)
+
+RMSLE_mod3 <- rmsle(train_normal$S9, train_normal$Prediccion)
+# 0,464071
+
+train_normal <- train_normal %>% 
+  mutate(Prediccion = round(media + mean(train_normal$diff))) %>% 
   mutate(diff_2 = S9 - Prediccion)
 
-train_mean %>% ggplot(aes(fill=c(S9,Prediccion))) + 
+train_normal %>% ggplot(aes(fill=c(S9,Prediccion))) + 
   geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
+  scale_x_continuous(limits=c(0,10))+
   theme_minimal()+
   labs(x = "Demanda normalizada",
        y = "Densidad",
        title = "Modelo media-normalizado-corregido",
        subtitle = "Comparativa Semana 9 vs Prediccion") 
-
-smr <- summary(train_mean$diff_2) 
-sd_mean <- sd(train_mean$diff_2)
-var_mean <- var(train_mean$diff_2)
-
-
-p1<-train_mean %>% ggplot(aes(x=id, y=diff_2*100))+
-  geom_point(alpha = 1/3) +
-  geom_line(alpha = 1/6)+
-  scale_y_continuous(limits=c(-50,50))+
-  theme_minimal()+
-  labs(x = "id Producto-Cliente",
-       y = " % Desviación de la predicción",
-       title = "Modelo media-normalizado corregido")
-
-p2<-train_mean %>% ggplot(aes(x=diff_2))+
-  geom_density(color = "gray50") +
-  scale_x_continuous(limits=c(-0.005,0.005))+
-  theme_minimal()+
-  labs(x = "Desviación de la predicción",
-       y = "Densidad",
-       title = "Modelo media-normalizado corregido")
-
-p3<-train_mean %>% ggplot(aes(fill=c(S9,Prediccion)))+
-  geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,0.02))+
-  theme_minimal()+
-  labs(x = "Demanda normalizada",
-       y = "Densidad",
-       title = "Modelo media-normalizado corregido",
-       subtitle = "Comparativa Semana 9 vs Predicción")
-
-p4<-train_mean %>% ggplot(aes(y=diff_2))+
-  geom_boxplot(color = "orangered") +
-  scale_y_continuous(limits=c(-0.005,0.005))+
-  theme_minimal()+
-  labs(y = "Desviación de la predicción",
-       title = "Modelo media-normalizado corregido")
-
-final_plot <- ggarrange(p1, p2, p3, p4, common.legend = TRUE)
-final_plot
-
-RMSLE_mod1 <- rmsle(train_mean$S9, train_mean$Prediccion)
-# 0,00449
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Modelo 2: Normalizando con logaritmos neperianos. ####
-# Obtenemos la media para cada Cliente-Producto y calculamos la diferencia con la semana 9.
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-train_log <- tablon
-
-for (i in 4:10){
-  train_log[i] <- log(train_log[i])
-}
-
-train_log$S3[train_log$S3==-Inf]<-0
-train_log$S4[train_log$S4==-Inf]<-0
-train_log$S5[train_log$S5==-Inf]<-0
-train_log$S6[train_log$S6==-Inf]<-0
-train_log$S7[train_log$S7==-Inf]<-0
-train_log$S8[train_log$S8==-Inf]<-0
-train_log$S9[train_log$S9==-Inf]<-0
-
-
-train_log <- train_log %>% 
-  rowwise() %>% 
-  mutate(log_media = mean(c_across(S3:S8)))
-
-#train_log$log_media[train_log$log_media==-Inf]<-0
-
-train_log <- train_log %>% 
-  mutate(diff = S9-log_media)
-
-#train_log$diff[train_log$diff==-Inf]<-0
-
-summary(train_log$diff) 
-sd_log <- sd(train_log$diff)
-
-train_log %>% ggplot(aes(x=id, y=diff))+
-  geom_point(color = "red") +
-  geom_line(color = "red")+
-  scale_y_continuous(limits=c(-10,10))+
-  theme_minimal()+
-  labs(x = "id Producto-Cliente",
-       y = " % Desviación de la predicción",
-       title = "Modelo log-normalizado")
-
-
-train_log %>% ggplot(aes(y=diff))+
-  geom_boxplot(color = "red") +
-  scale_y_continuous(limits=c(-0.00005,0.00005))+
-  theme_minimal()+
-  labs(y = "Desviación de la predicción",
-       title = "Modelo log-normalizado")
-
-
-train_log %>% ggplot()+
-  geom_density(aes(x=S9),color= "green")+
-  geom_density(aes(x=log_media),color="red")+
-  scale_x_continuous(limits=c(0,10))
-
-RMSLE_mod2 <- rmsle(train_log$S9, train_log$log_media)
-# 0,257018
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Modelo 3: Datos sin normalizar ####
-# Obtenemos la media para cada Cliente-Producto y calculamos la diferencia con la semana 9.
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-train_normal <- tablon %>% 
-  rowwise() %>% 
-  mutate(media = mean(c_across(S3:S8))) %>% 
-  mutate(diff = S9-media)
-
-summary(train_normal$diff) 
-sd(train_normal$diff)
-
-train_normal %>% ggplot(aes(x=diff))+
-  geom_density()+
-  scale_x_continuous(limits=c(-12,12))
-
-train_normal %>% ggplot()+
-  geom_density(aes(x=S9),color= "green")+
-  geom_density(aes(x=media),color="red")+
-  scale_x_continuous(limits=c(0,10))
-
-RMSLE_mod3 <- rmsle(train_normal$S9, train_normal$media)
-# 0,464071
+train_normal %>% select(S9,Prediccion) %>% 
+  filter(Prediccion <= S9+2 & Prediccion >= S9-2)
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Modelo 3: Calculo del error ####
+# Modelo media: Calculo del error ####
 # Cálculo de la predicción como redondeo de la media hacia abajo 
 # para evitar devoluciones.
 
