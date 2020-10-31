@@ -14,7 +14,7 @@ set.seed(43)
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Carga del archivo de datos con fread #############################
-dt_train <- fread("Data/train.csv")
+#dt_train <- fread("Data/train.csv")
 # Tarda en leer el train.csv así que lo guardamos
 #saveRDS(dt_train,"Data/dt_train")
 dt_train<-readRDS("Data/dt_train")
@@ -67,15 +67,47 @@ train_normal <- tablon %>%
   mutate(media = floor(mean(c_across(S3:S8)))) %>% 
   mutate(diff = S9-media)
 
-train_normal %>% ggplot(aes(fill=c(S9,Prediccion))) + 
+p1 <-train_normal %>% ggplot() + 
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  #scale_x_continuous(limits=c(0,2300))+
+  theme_minimal()+
+  labs(x = "Demanda unitaria",
+       y = "Densidad",
+       title = "Comparativa Semana 9 vs media",
+       subtitle = "Para todo el rango de valores de demanda")
+
+p2 <- train_normal %>% ggplot() + 
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(0,100))+
+  theme_minimal()+
+  labs(x = "Demanda unitaria",
+       y = "Densidad",
+       title = "Comparativa Semana 9 vs media",
+       subtitle = "Rango de demanda 0-100") 
+  
+p3 <- train_normal %>% ggplot() + 
+  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
+  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  scale_x_continuous(limits=c(0,50))+
+  theme_minimal()+
+  labs(x = "Demanda unitaria",
+       y = "Densidad",
+       title = "Comparativa Semana 9 vs media",
+       subtitle = "Rango de demanda 0-50") 
+  
+p4 <- train_normal %>% ggplot() + 
   geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
   scale_x_continuous(limits=c(0,10))+
   theme_minimal()+
-  labs(x = "Demanda normalizada",
+  labs(x = "Demanda unitaria",
        y = "Densidad",
-       title = "Modelo de la media",
-       subtitle = "Comparativa Semana 9 vs media") 
+       title = "Comparativa Semana 9 vs media",
+       subtitle = "Rango de demanda 0-10") 
+
+ggarrange(p1, p2, p3, p4)
 
 df_resumen <- tibble() 
 smr <- summary(train_normal$diff) 
@@ -96,43 +128,31 @@ df_resumen$Var <- format(round(as.numeric(df_resumen$Var),4))
 df_resumen$RMSLE <- format(round(as.numeric(df_resumen$RMSLE),4))
 
 
-p1<-train_normal %>% ggplot(aes(x=id, y=diff))+
+train_normal %>% ggplot(aes(x=id, y=diff))+
   geom_point(alpha = 1/3) +
   geom_line(alpha = 1/6)+
   scale_y_continuous(limits=c(-800,800))+
   theme_minimal()+
   labs(x = "id Producto-Cliente",
        y = " % Desviación de la predicción",
-       title = "Modelo media semanas")
+       title = "Diferencia S9-Predicción")
 
-p2<-train_normal %>% ggplot(aes(x=diff))+
+train_normal %>% ggplot(aes(x=diff))+
   geom_density(color = "gray50") +
-  scale_x_continuous(limits=c(-20,20))+
+  scale_x_continuous(limits=c(-50,50))+
   theme_minimal()+
   labs(x = "Desviación de la predicción",
        y = "Densidad",
-       title = "Modelo media semanas")
+       title = "Densidad de distribución de la diferencia S9-Predicción")
 
-p3<-train_normal %>% ggplot(aes(fill=c(S9,media)))+
-  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(-3,50))+
-  theme_minimal()+
-  labs(x = "Demanda",
-       y = "Densidad",
-       title = "Modelo media semanas",
-       subtitle = "Comparativa Semana 9 vs Predicción")
-
-p4<-train_normal %>% ggplot(aes(y=diff))+
-  geom_boxplot(color = "orangered") +
+train_normal %>% ggplot(aes(y=diff))+
+  geom_boxplot(varwidth = TRUE, color = "orangered") +
   scale_y_continuous(limits=c(-10,10))+
   theme_minimal()+
   labs(y = "Desviación de la predicción",
-       title = "Modelo media semanas")
+       title = "Boxplot para la diferencia S9-Predicción")
 
-ggarrange(p1, p2, p3, p4)
-
-RMSLE_mod3 <- rmsle(train_normal$S9, train_normal$Prediccion)
+RMSLE <- rmsle(train_normal$S9, train_normal$media)
 # 0,464071
 
 train_normal <- train_normal %>% 
@@ -142,7 +162,7 @@ train_normal <- train_normal %>%
 train_normal %>% ggplot(aes(fill=c(S9,Prediccion))) + 
   geom_density(aes(x=Prediccion),alpha = 0.5,fill = "orangered2") +
   geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  scale_x_continuous(limits=c(0,10))+
+  scale_x_continuous(limits=c(-5,10))+
   theme_minimal()+
   labs(x = "Demanda normalizada",
        y = "Densidad",
@@ -246,8 +266,8 @@ train_con_out <- train_normal %>%
 
 # Sin outliers
 train_sin_out %>% ggplot(aes(x=diff))+
-  geom_density()+
-  scale_x_continuous(limits=c(-20,20))
+  geom_density()
+  #scale_x_continuous(limits=c(-20,20))
 
 # Error en el número de productos en valor absoluto: productos por exceso + productos por defecto
 train_error_sin_out <- sum(train_sin_out$diff_2_abs)
@@ -273,7 +293,7 @@ RMSLE_mod3.3 <- rmsle(train_sin_out$S9, train_sin_out$prediccion)
 # Con outliers
 train_con_out %>% ggplot(aes(x=diff))+
   geom_density()+
-  scale_x_continuous(limits=c(-50,50))
+  scale_x_continuous(limits=c(-100,100))
 
 # Error en el número de productos en valor absoluto: productos por exceso + productos por defecto
 train_error_con_out <- sum(train_con_out$diff_2_abs)
@@ -295,4 +315,24 @@ train_error_con_out_positivos - train_error_con_out_negativos
 error_producto_con_out = (train_error_con_out/sum(train_con_out$S9))*100
 
 RMSLE_mod3.4 <- rmsle(train_con_out$S9, train_con_out$prediccion)
+
+
+
+# Trabajo con el archivo de test
+
+dt_test <- fread("Data/test.csv")
+dt_test <- dt_test[, .(Semana,Cliente_ID,Producto_ID)]
+dt_test <- dt_test[Semana==10]
+df_test <- as_tibble(dt_test)
+rm(dt_test)
+df_test <- distinct(df_test)
+df_pred <- tablon %>%  
+  rowwise() %>% 
+  mutate(pred = floor(mean(c_across(S3:S9)))) %>% 
+  select(Cliente_ID, Producto_ID, pred)
+
+df_result <- df_test %>% 
+  inner_join(df_pred, by = c("Cliente_ID", "Producto_ID"))
+  
+  
 
