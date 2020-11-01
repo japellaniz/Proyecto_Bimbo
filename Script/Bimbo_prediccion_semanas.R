@@ -68,46 +68,61 @@ train_normal <- tablon %>%
   mutate(diff = S9-media)
 
 p1 <-train_normal %>% ggplot() + 
-  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
-  #scale_x_continuous(limits=c(0,2300))+
+  geom_density(aes(x=media,fill = "Prediccion"),alpha = 0.5) +
+  geom_density(aes(x=S9,fill = "Semana 9"),alpha = 0.5) +
+  scale_fill_manual("", guide = "legend",
+                    values = c("Prediccion" = "orangered2",
+                               "Semana 9" = "gray50")) +
   theme_minimal()+
+  theme(legend.position = c(0.8,0.9))+
   labs(x = "Demanda unitaria",
        y = "Densidad",
        title = "Comparativa Semana 9 vs media",
        subtitle = "Para todo el rango de valores de demanda")
 
 p2 <- train_normal %>% ggplot() + 
-  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  geom_density(aes(x=media,fill = "Prediccion"),alpha = 0.5) +
+  geom_density(aes(x=S9,fill = "Semana 9"),alpha = 0.5) +
+  scale_fill_manual("", guide = "legend",
+                    values = c("Prediccion" = "orangered2",
+                               "Semana 9" = "gray50")) +
   scale_x_continuous(limits=c(0,100))+
   theme_minimal()+
+  theme(legend.position = c(0.8,0.9))+
   labs(x = "Demanda unitaria",
        y = "Densidad",
        title = "Comparativa Semana 9 vs media",
        subtitle = "Rango de demanda 0-100") 
   
 p3 <- train_normal %>% ggplot() + 
-  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  geom_density(aes(x=media,fill = "Prediccion"),alpha = 0.5) +
+  geom_density(aes(x=S9,fill = "Semana 9"),alpha = 0.5) +
+  scale_fill_manual("", guide = "legend",
+                     values = c("Prediccion" = "orangered2",
+                                "Semana 9" = "gray50")) +
   scale_x_continuous(limits=c(0,50))+
   theme_minimal()+
+  theme(legend.position = c(0.8,0.9))+
   labs(x = "Demanda unitaria",
        y = "Densidad",
        title = "Comparativa Semana 9 vs media",
        subtitle = "Rango de demanda 0-50") 
   
 p4 <- train_normal %>% ggplot() + 
-  geom_density(aes(x=media),alpha = 0.5,fill = "orangered2") +
-  geom_density(aes(x=S9),alpha = 0.5,fill = "gray50") +
+  geom_density(aes(x=media,fill = "Prediccion"),alpha = 0.5) +
+  geom_density(aes(x=S9,fill = "Semana 9"),alpha = 0.5) +
+  scale_fill_manual("", guide = "legend",
+                    values = c("Prediccion" = "orangered2",
+                               "Semana 9" = "gray50")) +
   scale_x_continuous(limits=c(0,10))+
   theme_minimal()+
+  theme(legend.position = c(0.8,0.9))+
   labs(x = "Demanda unitaria",
        y = "Densidad",
        title = "Comparativa Semana 9 vs media",
        subtitle = "Rango de demanda 0-10") 
 
-ggarrange(p1, p2, p3, p4)
+ggarrange(p1, p2, p3, p4, common.legend = TRUE, legend = "bottom")
 
 df_resumen <- tibble() 
 smr <- summary(train_normal$diff) 
